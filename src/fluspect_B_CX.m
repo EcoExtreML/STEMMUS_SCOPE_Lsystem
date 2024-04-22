@@ -96,8 +96,10 @@ function [leafopt] = fluspect_B_CX(spectral, leafbio, optipar)
     t2          = Kall.^2 .* expint(Kall);
     tau         = ones(size(t1));
     tau(j)      = t1(j) + t2(j);
-    kChlrel     = zeros(size(t1));
-    kChlrel(j)  = Cab * Kab(j) ./ (Kall(j) * N);
+    [kChlrel, kCarrel]     = deal(zeros(size(t1)));
+%     kChlrel     = zeros(size(t1));
+    kChlrel(j)  = Cab*Kab(j)./(Kall(j)*N);
+    kCarrel(j)  = Cca*Kca(j)./(Kall(j)*N);
 
     talf        = calctav(59, nr);
     ralf        = 1 - talf;
@@ -144,6 +146,7 @@ function [leafopt] = fluspect_B_CX(spectral, leafbio, optipar)
     leafopt.refl = refl;
     leafopt.tran = tran;
     leafopt.kChlrel = kChlrel;
+    leafopt.kCarrel = kCarrel;
 
     % From here a new path is taken: The doubling method used to calculate
     % fluoresence is now only applied to the part of the leaf where absorption

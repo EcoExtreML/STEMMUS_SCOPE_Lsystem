@@ -1,4 +1,4 @@
-WorkDir=/home/jovyan/private/
+WorkDir=F:/1_MyStudy/1_ResearchProgress/8_Simulations_for_170FluxSites/1_STEMMUS_SCOPE_LSYSTEM
 SoilPropertyPath=/data/shared/EcoExtreML/STEMMUS_SCOPEv1.0.0/input/SoilProperty/
 ForcingPath=/data/shared/EcoExtreML/STEMMUS_SCOPEv1.0.0/input/Plumber2_data/
 Location=AU-DaS
@@ -10,6 +10,6 @@ soil_spectrum=/data/shared/EcoExtreML/STEMMUS_SCOPEv1.0.0/input/soil_spectrum/
 input_data=/data/shared/EcoExtreML/STEMMUS_SCOPEv1.0.0/input/input_data.xlsx
 InitialConditionPath=/data/shared/EcoExtreML/STEMMUS_SCOPEv1.0.0/input/Initial_condition/
 StartTime=2001-01-01T00:00
-EndTime=2001-01-02T00:00
-InputPath=
-OutputPath=
+EndTime=2002-12-31T00:00
+InputPath=../../Input/ID-Pag_2024-04-11-1544/
+OutputPath=../../Output/

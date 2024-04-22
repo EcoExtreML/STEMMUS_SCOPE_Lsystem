@@ -139,7 +139,7 @@ if strcmp(bmiMode, "initialize") || strcmp(runMode, "full")
     end
 
     %% 9. Define canopy structure
-    canopy.nlayers  = 30;
+    canopy.nlayers  = 60;
     nl              = canopy.nlayers;
     canopy.x        = (-1 / nl:-1 / nl:-1)';         % a column vector
     canopy.xl       = [0; canopy.x];                 % add top level
@@ -147,6 +147,11 @@ if strcmp(bmiMode, "initialize") || strcmp(runMode, "full")
     canopy.nlazi    = 36;
     canopy.litab    = [5:10:75 81:2:89]';   % a column, never change the angles unless 'ladgen' is also adapted
     canopy.lazitab  = (5:10:355);           % a row
+
+    options.calc_canopy_structure = 1;      
+    if options.calc_canopy_structure        % consider the vertical distribution of LAI
+        canopy.VerticalProbability = load([path_input,'cropgrowth/CanopyStructure.txt']);
+    end
 
     %% 10. Define spectral regions
     [spectral] = io.define_bands();
@@ -384,7 +389,8 @@ if strcmp(bmiMode, 'update') || strcmp(runMode, 'full')
                 else
                     canopy.lidf     = equations.leafangles(canopy.LIDFa, canopy.LIDFb);    % This is 'ladgen' in the original SAIL model,
                 end
-
+                
+                %% leaf radiative transfer model FLUSPECT
                 leafbio.emis        = 1 - leafbio.rho_thermal - leafbio.tau_thermal;
 
                 if options.calc_PSI
@@ -438,8 +444,12 @@ if strcmp(bmiMode, 'update') || strcmp(runMode, 'full')
                     atmo.M      = helpers.aggreg(atmfile, spectral.SCOPEspec);
                 end
                 atmo.Ta     = meteo.Ta;
-
-                [rad, gap, profiles]   = RTMo(spectral, atmo, soil, leafopt, canopy, angles, meteo, rad, options);
+                
+                if options.calc_canopy_structure         % consider the vertical distribution of LAI                    
+                    [rad, gap, profiles]   = canopystructure.RTMo_VerticalLAI(spectral, atmo, soil, leafopt, canopy, angles, meteo, options);
+                else                                     % Assume the canopy layers to be homogeneous
+                    [rad, gap, profiles]   = RTMo(spectral, atmo, soil, leafopt, canopy, angles, meteo, rad, options);
+                end
 
                 switch options.calc_ebal
                     case 1
