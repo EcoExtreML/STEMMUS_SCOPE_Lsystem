@@ -446,7 +446,7 @@ if strcmp(bmiMode, 'update') || strcmp(runMode, 'full')
                 atmo.Ta     = meteo.Ta;
                 
                 if options.calc_canopy_structure         % consider the vertical distribution of LAI                    
-                    [rad, gap, profiles]   = canopystructure.RTMo_VerticalLAI(spectral, atmo, soil, leafopt, canopy, angles, meteo, options);
+                    [rad, gap, profiles]   = canopystructure.RTMo_VerticalLAI(spectral, atmo, soil, leafopt, canopy, angles, Constants, meteo, options);
                 else                                     % Assume the canopy layers to be homogeneous
                     [rad, gap, profiles]   = RTMo(spectral, atmo, soil, leafopt, canopy, angles, meteo, rad, options);
                 end

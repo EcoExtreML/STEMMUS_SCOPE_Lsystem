@@ -66,7 +66,10 @@ function [rad,gap,canopy,profiles] = RTMo_VerticalLAI(spectral,atmo,soil,leafopt
 %    vegetation canopies. IEEE Transactions on geoscience and remote 
 %    sensing, 45,6.
 %{3} Verhoef (1985), 'Earth Observation Modeling based on Layer Scattering
-%    Matrices', Remote sensing of Environment, 17:167-175 
+%    Matrices', Remote sensing of Environment, 17:167-175
+%{4} Yang (2017), 'The mSCOPE model: A simple adaptation to the SCOPE model 
+%    to describe reflectance, fluorescence and photosynthesis of
+%    vertically', Remote sensing of Environment, 201:1-11
 %              
 % Usage:
 % function [rad,gap,profiles] = RTMo(spectral,atmo,soil,leafopt,canopy,angles,meteo,rad,options)  
@@ -127,6 +130,7 @@ rs      =   soil.refl;          % [nwl,nsoils] soil reflectance spectra
 epsc    =   1-rho-tau;          % [nl,nwl]     emissivity of leaves
 epss    =   1-rs;               % [nwl]        emissivity of soil
 iLAI    =   LAI*canopy.VerticalProbability(:,2);             % [nl]          LAI of elementary layer
+xl      =   vertcat(canopy.VerticalProbability(:,1),0)-1;
 
 % initializations
 Rndif                       = zeros(nl,1);                 % [nl+1]         abs. diffuse rad soil+veg
@@ -202,8 +206,9 @@ a           = 1-sigf;                       % [nl,nwl]     attenuation
 % diffuse fluxes within the vegetation covered part 
 %iLAI    =   LAI/nl; 
 % tau_ss = repmat(1-k.*iLAI,nl,1);  %REPLACE when LIDF profile ready.
-tau_ss = (1-k.*iLAI);
-tau_dd = (1-a.*iLAI);             %the value of tss,tsd,psd,pdd are calculated by the Eq.15 in Yang et al. (2020)
+tau_ss = (1-k.*iLAI);             % Eq.17 in Yang (2017) tss,tsd,psd,pdd
+tau_ss(tau_ss<0) = exp(-k * iLAI(tau_ss<0));     % Eq in Voef (1998) if there is a negative value
+tau_dd = (1-a.*iLAI);             
 tau_sd = sf.*iLAI;
 rho_sd = sb.*iLAI;
 rho_dd = sigb.*iLAI;
@@ -218,14 +223,24 @@ Emin_ = Emins_+Emind_;
 Eplu_ = Eplus_+Eplud_;
 %%
 % 1.5 probabilities Ps, Po, Pso
-Ps          =   exp(k*xl*LAI) ;                                              % [nl+1]  p154{1} probability of viewing a leaf in solar dir
-Po          =   exp(K*xl*LAI) ;
+cLAI        =   cumsum(iLAI);          %   the cumulative distribution of leaves  ydy
+cLAI        =   vertcat(cLAI,LAI);              %   [nl+1]       all levels + soil
+
+Ps          =   exp(-k*cLAI) ;                                              % [nl+1]  p154{1} probability of viewing a leaf in solar dir
+Po          =   exp(-K*cLAI) ;
 Ps(1:nl)    =   Ps(1:nl) *(1-exp(-k*LAI*dx))/(k*LAI*dx);                                      % Correct Ps/Po for finite dx
 Po(1:nl)    =   Po(1:nl) *(1-exp(-K*LAI*dx))/(K*LAI*dx);  % Correct Ps/Po for finite dx
 q           =   canopy.hot;
 Pso         =   zeros(size(Po));
 for j=1:length(xl)
-    Pso(j,:)=   quad(@(y)Psofunction(K,k,LAI,q,dso,y),xl(j)-dx,xl(j))/dx; %#ok<FREMO>
+    if j == 1
+       x_data  = [xl(j),xl(j+1)];
+       cLAI_data = [cLAI(j),cLAI(j+1)]; 
+    else
+       x_data  = [xl(j-1),xl(j)];
+       cLAI_data = [cLAI(j-1),cLAI(j)]; 
+    end
+    Pso(j,:)=   quad(@(y)PsofunctionLsystem(K,k,LAI,x_data,cLAI_data,q,dso,y),x_data(1),x_data(2))/(x_data(2)-x_data(1)); %# Heterogeneous canopy structure Lsystem
 end
 Pso(Pso>Po)= min([Po(Pso>Po),Ps(Pso>Po)],[],2);    %takes care of rounding error
 Pso(Pso>Ps)= min([Po(Pso>Ps),Ps(Pso>Ps)],[],2);    %takes care of rounding error
@@ -236,16 +251,16 @@ gap.Pso      = Pso;
 % in viewing direction, spectral due to diffuse light
 
 % vegetation contribution
-piLocd_     = (sum(vb.*Po(1:nl).*Emind_(1:nl,:)) +...
-              sum(vf.*Po(1:nl).*Eplud_(1:nl,:)))'*iLAI;
+piLocd_     = (sum(vb.*Po(1:nl).*Emind_(1:nl,:).*iLAI) +...
+              sum(vf.*Po(1:nl).*Eplud_(1:nl,:).*iLAI))';
 % soil contribution          
 piLosd_     = rs.*(Emind_(end,:)'*Po(end)); 
 
 % in viewing direction, spectral due to direct solar light
 % vegetation contribution
-piLocu_     = (sum(vb.*Po(1:nl).*Emins_(1:nl,:)) +...
-              sum(vf.*Po(1:nl).*Eplus_(1:nl,:))+...
-              sum(w.*Pso(1:nl).*Esun_'))'*iLAI;
+piLocu_     = (sum(vb.*Po(1:nl).*Emins_(1:nl,:).*iLAI) +...
+              sum(vf.*Po(1:nl).*Eplus_(1:nl,:).*iLAI)+...
+              sum(w.*Pso(1:nl).*Esun_'.*iLAI))';
 % soil contribution
 piLosu_     = rs.* (Emins_(end,:)'*Po(end) + Esun_*Pso(end)); 
 
@@ -267,9 +282,9 @@ Refl(I)      = rso(I);                  % prevents numerical instability in abso
 %% 4. net fluxes, spectral and total, and incoming fluxes
 %4.1 incident PAR at the top of canopy, spectral and spectrally integrated
 P_          = e2phot(wl(Ipar)*1E-9,(Esun_(Ipar)+Esky_(Ipar)),constants);      % 400-700 nm
-P           = 0.001 * Sint(P_,wlPAR);                                % mol m-2s-1
+P           = 0.001 * helpers.Sint(P_,wlPAR);                                % mol m-2s-1
 EPAR_       = Esun_(Ipar)+Esky_(Ipar);
-EPAR        = 0.001 * Sint(EPAR_,wlPAR);
+EPAR        = 0.001 * helpers.Sint(EPAR_,wlPAR);
 %Psun        = 0.001 * Sint(e2phot(wlPAR*1E-9,Esun_(Ipar),constants),wlPAR);   % Incident solar PAR in PAR units
 % Incident and absorbed solar radiation
 
@@ -281,13 +296,13 @@ EPAR        = 0.001 * Sint(EPAR_,wlPAR);
 
 [Asun,Pnsun,Rnsun_PAR,Pnsun_Cab,Rnsun_Cab,Pnsun_Car,Rnsun_Car]= deal(zeros(nl,1));
 for j=1:nl
-    Asun(j)        = 0.001 * Sint(Esun_.*epsc(j,:)',wl);                                 % Total absorbed solar radiation
-    Pnsun(j)       = 0.001 * Sint(e2phot(wlPAR*1E-9,Esun_(Ipar).*epsc(j,Ipar)',constants),wlPAR);  % Absorbed solar radiation in PAR range in moles m-2 s-1
-    Rnsun_Cab(j)   = 0.001 * Sint(Esun_(spectral.IwlP)'.*epsc(j,spectral.IwlP).*kChlrel(j,:),spectral.wlP);
-    Rnsun_Car(j)   = 0.001 * Sint(Esun_(spectral.IwlP)'.*epsc(j,spectral.IwlP).*kCarrel(j,:),spectral.wlP);
-    Rnsun_PAR(j)   = 0.001 * Sint(Esun_(Ipar)'.*epsc(j,Ipar),wlPAR);
-    Pnsun_Cab(j)   = 0.001 * Sint(e2phot(spectral.wlP*1E-9,kChlrel(j,:)'.*Esun_(spectral.IwlP).*epsc(j,spectral.IwlP)',constants),spectral.wlP);
-    Pnsun_Car(j)   = 0.001 * Sint(e2phot(spectral.wlP*1E-9,kCarrel(j,:)'.*Esun_(spectral.IwlP).*epsc(j,spectral.IwlP)',constants),spectral.wlP);
+    Asun(j)        = 0.001 * helpers.Sint(Esun_.*epsc(j,:)',wl);                                 % Total absorbed solar radiation
+    Pnsun(j)       = 0.001 * helpers.Sint(e2phot(wlPAR*1E-9,Esun_(Ipar)'.*epsc(j,Ipar),constants),wlPAR);  % Absorbed solar radiation in PAR range in moles m-2 s-1
+    Rnsun_Cab(j)   = 0.001 * helpers.Sint(Esun_(spectral.IwlP)'.*epsc(j,spectral.IwlP).*kChlrel(j,:),spectral.wlP);
+    Rnsun_Car(j)   = 0.001 * helpers.Sint(Esun_(spectral.IwlP)'.*epsc(j,spectral.IwlP).*kCarrel(j,:),spectral.wlP);
+    Rnsun_PAR(j)   = 0.001 * helpers.Sint(Esun_(Ipar)'.*epsc(j,Ipar),wlPAR);
+    Pnsun_Cab(j)   = 0.001 * helpers.Sint(e2phot(spectral.wlP*1E-9,kChlrel(j,:).*Esun_(spectral.IwlP)'.*epsc(j,spectral.IwlP),constants),spectral.wlP);
+    Pnsun_Car(j)   = 0.001 * helpers.Sint(e2phot(spectral.wlP*1E-9,kCarrel(j,:).*Esun_(spectral.IwlP)'.*epsc(j,spectral.IwlP),constants),spectral.wlP);
 
 end
 
@@ -295,7 +310,7 @@ end
 
 % total direct radiation (incident and net) per leaf area (W m-2 leaf)
 %Pdir        = fs * Psun;                        % [13 x 36]   incident
-if options.lite
+if ~options.calc_canopy_structure
     fs      = lidf'*mean(fs,2);%
     Rndir       = fs * Asun(j);                        % [13 x 36 x nl]   net
     Pndir       = fs * Pnsun(j);                       % [13 x 36 x nl]   net PAR
@@ -323,32 +338,32 @@ for j = 1:nl     % 1 top nl is bottom
     E_         = .5*(Emin_(j,:) + Emin_(j+1,:)+ Eplu_(j,:)+ Eplu_(j+1,:));
    
     % incident PAR flux, integrated over all wavelengths (moles m-2 s-1)
-    Pdif(j)    = .001 * Sint(e2phot(wlPAR'*1E-9,E_(Ipar),constants),wlPAR);  % [nl] , including conversion mW >> W
+    Pdif(j)    = .001 * helpers.Sint(e2phot(wlPAR'*1E-9,E_(Ipar),constants),wlPAR);  % [nl] , including conversion mW >> W
   
     % net radiation (mW m-2 um-1) and net PAR (moles m-2 s-1 um-1), per wavelength
     Rndif_(j,:)         = E_.*epsc(j,:);                                                    % [nl,nwl]  Net (absorbed) radiation by leaves
-    Pndif_(j,:)         = .001 *(e2phot(wlPAR*1E-9, Rndif_(j,Ipar)',constants))';                     % [nl,nwl]  Net (absorbed) as PAR photons
+    Pndif_(j,:)         = .001 *(e2phot(wlPAR*1E-9, Rndif_(j,Ipar),constants))';                     % [nl,nwl]  Net (absorbed) as PAR photons
     Rndif_Cab_(j,:)     = (kChlrel(j,:).*Rndif_(j,spectral.IwlP));    % [nl,nwl]  Net (absorbed) as PAR photons by Cab
-    Pndif_Cab_(j,:)     = .001 *(e2phot(spectral.wlP*1E-9, (kChlrel(j,:).*Rndif_(j,spectral.IwlP))',constants))';    % [nl,nwl]  Net (absorbed) as PAR photons by Cab
+    Pndif_Cab_(j,:)     = .001 *(e2phot(spectral.wlP*1E-9, (kChlrel(j,:).*Rndif_(j,spectral.IwlP)),constants))';    % [nl,nwl]  Net (absorbed) as PAR photons by Cab
     Rndif_Car_(j,:)     = (kCarrel(j,:).*Rndif_(j,spectral.IwlP));    % [nl,nwl]  Net (absorbed) as PAR photons by Car
-    Pndif_Car_(j,:)     = .001 *(e2phot(spectral.wlP*1E-9, (kCarrel(j,:).*Rndif_(j,spectral.IwlP))',constants))';    % [nl,nwl]  Net (absorbed) as PAR photons by Car
+    Pndif_Car_(j,:)     = .001 *(e2phot(spectral.wlP*1E-9, (kCarrel(j,:).*Rndif_(j,spectral.IwlP)),constants))';    % [nl,nwl]  Net (absorbed) as PAR photons by Car
 
     
     Rndif_PAR_(j,:)     = Rndif_(j,Ipar);                                                   % [nl,nwlPAR]  Net (absorbed) as PAR energy 
    
     % net radiation (W m-2) and net PAR (moles m-2 s-1), integrated over all wavelengths
-    Rndif(j)            = .001 * Sint(Rndif_(j,:),wl);              % [nl]  Full spectrum net diffuse flux
-    Pndif(j)            =        Sint(Pndif_(j,Ipar),wlPAR);        % [nl]  Absorbed PAR
-    Pndif_Cab(j)        =        Sint(Pndif_Cab_(j,:),spectral.wlP);    % [nl]  Absorbed PAR by Cab integrated
-    Rndif_Cab(j)        = .001 * Sint(Rndif_Cab_(j,:),spectral.wlP);      % [nl]  Absorbed PAR by Cab integrated
-    Pndif_Car(j)        =        Sint(Pndif_Car_(j,:),spectral.wlP);    % [nl]  Absorbed PAR by Car integrated
-    Rndif_Car(j)        = .001 * Sint(Rndif_Car_(j,:),spectral.wlP);      % [nl]  Absorbed PAR by Car integrated
-    Rndif_PAR(j)        = .001 * Sint(Rndif_PAR_(j,Ipar),wlPAR);    % [nl]  Absorbed PAR by Cab integrated
+    Rndif(j)            = .001 * helpers.Sint(Rndif_(j,:),wl);              % [nl]  Full spectrum net diffuse flux
+    Pndif(j)            =        helpers.Sint(Pndif_(j,Ipar),wlPAR);        % [nl]  Absorbed PAR
+    Pndif_Cab(j)        =        helpers.Sint(Pndif_Cab_(j,:),spectral.wlP);    % [nl]  Absorbed PAR by Cab integrated
+    Rndif_Cab(j)        = .001 * helpers.Sint(Rndif_Cab_(j,:),spectral.wlP);      % [nl]  Absorbed PAR by Cab integrated
+    Pndif_Car(j)        =        helpers.Sint(Pndif_Car_(j,:),spectral.wlP);    % [nl]  Absorbed PAR by Car integrated
+    Rndif_Car(j)        = .001 * helpers.Sint(Rndif_Car_(j,:),spectral.wlP);      % [nl]  Absorbed PAR by Car integrated
+    Rndif_PAR(j)        = .001 * helpers.Sint(Rndif_PAR_(j,Ipar),wlPAR);    % [nl]  Absorbed PAR by Cab integrated
 end
 
 % soil layer, direct and diffuse radiation
-Rndirsoil   = .001 * Sint(Esun_.*epss,wl);          % [1] Absorbed solar flux by the soil
-Rndifsoil   = .001 * Sint(Emin_(nl+1,:).*epss',wl); % [1] Absorbed diffuse downward flux by the soil (W m-2)
+Rndirsoil   = .001 * helpers.Sint(Esun_.*epss,wl);          % [1] Absorbed solar flux by the soil
+Rndifsoil   = .001 * helpers.Sint(Emin_(nl+1,:).*epss',wl); % [1] Absorbed diffuse downward flux by the soil (W m-2)
 
 % net (n) radiation R and net PAR P per component: sunlit (u), shaded (h) soil(s) and canopy (c),
 % [W m-2 leaf or soil surface um-1]
@@ -360,7 +375,7 @@ Pnhc_Car    = Pndif_Car;        % [nl] shaded leaves or needles
 Rnhc_Car    = Rndif_Car;        % [nl] shaded leaves or needles
 Rnhc_PAR    = Rndif_PAR;        % [nl] shaded leaves or needles
 
-if ~options.lite
+if options.calc_canopy_structure
     [Rnuc,Pnuc,Pnuc_Cab,Rnuc_PAR,Rnuc_Cab,Rnuc_Car,Pnuc_Car] = deal(0*Rndir);
     for j = 1:nl
         %Puc(:,:,j)  = Pdir(:,:,j)      + Pdif(j);      % [13,36,nl] Total fluxes on sunlit leaves or needles
@@ -385,10 +400,10 @@ end
 Rnus        = Rndifsoil + Rndirsoil; % [1] sunlit soil 
 Rnhs        = Rndifsoil;  % [1] shaded soil
 
-if options.calc_vert_profiles   
-    [Pnu1d  ]           = meanleaf(canopy,Pnuc,         'angles');   % [nli,nlo,nl]      mean net radiation sunlit leaves
-    [Pnu1d_Cab  ]       = meanleaf(canopy,Pnuc_Cab,     'angles');   % [nli,nlo,nl]      mean net radiation sunlit leaves
-    [Pnu1d_Car  ]       = meanleaf(canopy,Pnuc_Car,     'angles');   % [nli,nlo,nl]      mean net radiation sunlit leaves
+if options.calc_canopy_structure   
+    [Pnu1d  ]           = equations.meanleaf(canopy,Pnuc,         'angles');   % [nli,nlo,nl]      mean net radiation sunlit leaves
+    [Pnu1d_Cab  ]       = equations.meanleaf(canopy,Pnuc_Cab,     'angles');   % [nli,nlo,nl]      mean net radiation sunlit leaves
+    [Pnu1d_Car  ]       = equations.meanleaf(canopy,Pnuc_Car,     'angles');   % [nli,nlo,nl]      mean net radiation sunlit leaves
     profiles.Pn1d       = ((1-Ps(1:nl)).*Pnhc     + Ps(1:nl).*(Pnu1d));        %[nl]           mean photos leaves, per layer
     profiles.Pn1d_Cab   = ((1-Ps(1:nl)).*Pnhc_Cab + Ps(1:nl).*(Pnu1d_Cab));        %[nl]           mean photos leaves, per layer
     profiles.Pn1d_Car   = ((1-Ps(1:nl)).*Pnhc_Car + Ps(1:nl).*(Pnu1d_Car));        %[nl]           mean photos leaves, per layer
@@ -399,9 +414,9 @@ end
 %% 5 Model output
 % up and down and hemispherical out, cumulative over wavelenght
 Eout_       = Eplu_(1,:)';
-Eouto       = 0.001 * Sint(Eout_(spectral.IwlP),spectral.wlP);  %     [1] hemispherical out, in optical range (W m-2)
-Eoutt       = 0.001 * Sint(Eout_(spectral.IwlT),spectral.wlT);  %     [1] hemispherical out, in thermal range (W m-2)
-Lot         = 0.001 * Sint(Lo_(spectral.IwlT),spectral.wlT);    %     [1] hemispherical out, in thermal range (W m-2)
+Eouto       = 0.001 * helpers.Sint(Eout_(spectral.IwlP),spectral.wlP);  %     [1] hemispherical out, in optical range (W m-2)
+Eoutt       = 0.001 * helpers.Sint(Eout_(spectral.IwlT),spectral.wlT);  %     [1] hemispherical out, in thermal range (W m-2)
+Lot         = 0.001 * helpers.Sint(Lo_(spectral.IwlT),spectral.wlT);    %     [1] hemispherical out, in thermal range (W m-2)
 
 % place output in structure rad
 gap.k       = k;        % extinction cofficient in the solar direction
@@ -567,19 +582,29 @@ else
 end
 return;
 
+function pso    =   PsofunctionLsystem(K,k,LAI,x_data,cLAI_data,q,dso,xl)
+if dso~=0
+    alf         =   (dso/q) *2/(k+K);
+    cLAI_interp =   interp1 (x_data, cLAI_data, xl, "linear");
+    pso         =   exp((K+k)*cLAI_interp*(-1) + sqrt(K*k)*LAI/(alf  )*(1-exp(xl*(alf  ))));% [nl+1]  factor for correlation of Ps and Po
+else
+    cLAI_interp =   interp1 (x_data, cLAI_data, xl, "linear");
+    pso         =   exp((K+k)*cLAI_interp*(-1) - sqrt(K*k)*cLAI*(-1));% [nl+1]  factor for correlation of Ps and Po
+end
+
 function [R_sd,R_dd,Xss,Xsd,Xdd]  = calc_reflectances(tau_ss,tau_sd,tau_dd,rho_dd,rho_sd,rs,nl,nwl)
 [R_sd,R_dd] =   deal(zeros(nl+1,nwl));      % surface reflectance
 [Xsd,Xdd]   =   deal(zeros(nl,nwl));        % Effective transmittance
-Xss         =   zeros(1,nl);                % Effective transmittance
+Xss         =   zeros(nl,1);                % Effective transmittance
 R_sd(nl+1,:)   =   rs;
 R_dd(nl+1,:)   =   rs;
 for j=nl:-1:1 % from bottom to top. note nl+1 the background. 1 is the top of canopy.
-    Xss      = tau_ss(j);
+    Xss(j)      = tau_ss(j);
     dnorm       = 1-rho_dd(j,:).*R_dd(j+1,:);
-    Xsd(j,:)    = (tau_sd(j,:)+tau_ss(j).*R_sd(j+1,:).*rho_dd(j,:))./dnorm;             % Eq.18-3 in Yang et al. (2020)  Tsd*(j+1)
-    Xdd(j,:)    = tau_dd(j,:)./dnorm;                                                   % Eq.18-3 in Yang et al. (2020)  Tdd*(j+1)
-    R_sd(j,:)   = rho_sd(j,:)+tau_dd(j,:).*(R_sd(j+1,:).*Xss+R_dd(j+1,:).*Xsd(j,:));    % Eq.18-4 in Yang et al. (2020)  Rsd*(j+1)
-    R_dd(j,:)   = rho_dd(j,:)+tau_dd(j,:).*R_dd(j+1,:).*Xdd(j,:);                       % Eq.18-4 in Yang et al. (2020)  Rdd*(j+1)
+    Xsd(j,:)    = (tau_sd(j,:)+tau_ss(j).*R_sd(j+1,:).*rho_dd(j,:))./dnorm;             % Eq.18 in Yang et al. (2017)  Tsd*(j+1)
+    Xdd(j,:)    = tau_dd(j,:)./dnorm;                                                   % Eq.18 in Yang et al. (2017)  Tdd*(j+1)
+    R_sd(j,:)   = rho_sd(j,:)+tau_dd(j,:).*(R_sd(j+1,:).*Xss(j)+R_dd(j+1,:).*Xsd(j,:));    % Eq.18 in Yang et al. (2017)  Rsd*(j+1)
+    R_dd(j,:)   = rho_dd(j,:)+tau_dd(j,:).*R_dd(j+1,:).*Xdd(j,:);                       % Eq.18 in Yang et al. (2017)  Rdd*(j+1)
 end
 return;
 
@@ -589,7 +614,7 @@ Es_(1,:)       = Esun_;
 Emin_(1,:)     = Esky_;
 
 for j=1:nl % from top to bottom
-    Es_(j+1,:)    =   Xss.*Es_(j,:);
+    Es_(j+1,:)    =   Xss(j).*Es_(j,:);
     Emin_(j+1,:)  =   Xsd(j,:).*Es_(j,:)+Xdd(j,:).*Emin_(j,:);
     Eplu_(j,:)    =   R_sd(j,:).*Es_(j,:)+R_dd(j,:).*Emin_(j,:);
 end
@@ -603,7 +628,7 @@ function [Esun_,Esky_] = calcTOCirr(atmo,meteo,rdd,rsd,wl,nwl)
 % Extract MODTRAN atmosphere parameters at the SCOPE wavelengths
 
 Fd      = zeros(nwl,1);
-Ls      = Planck(wl,meteo.Ta+273.15);
+Ls      = equations.Planck(wl',meteo.Ta+273.15);
 
 if ~isfield(atmo,'Esun_')
     
@@ -633,15 +658,15 @@ if ~isfield(atmo,'Esun_')
         [fEsuno,fEskyo,fEsunt,fEskyt]          = deal(0*Esun_);   %initialization
         
         J_o             = wl<3000;                          %find optical spectrum
-        Esunto          = 0.001 * Sint(Esun_(J_o),wl(J_o)); %Calculate optical sun fluxes (by Integration), including conversion mW >> W
-        Eskyto          = 0.001 * Sint(Esky_(J_o),wl(J_o)); %Calculate optical sun fluxes (by Integration)
+        Esunto          = 0.001 * helpers.Sint(Esun_(J_o),wl(J_o)); %Calculate optical sun fluxes (by Integration), including conversion mW >> W
+        Eskyto          = 0.001 * helpers.Sint(Esky_(J_o),wl(J_o)); %Calculate optical sun fluxes (by Integration)
         Etoto           = Esunto + Eskyto;                  %Calculate total fluxes
         fEsuno(J_o)     = Esun_(J_o)/Etoto;                 %fraction of contribution of Sun fluxes to total light
         fEskyo(J_o)     = Esky_(J_o)/Etoto;                 %fraction of contribution of Sky fluxes to total light
         
         J_t             = wl>=3000;                         %find thermal spectrum
-        Esuntt          = 0.001 * Sint(Esun_(J_t),wl(J_t)); %Themal solar fluxes
-        Eskytt          = 0.001 * Sint(Esky_(J_t),wl(J_t)); %Thermal Sky fluxes
+        Esuntt          = 0.001 * helpers.Sint(Esun_(J_t),wl(J_t)); %Themal solar fluxes
+        Eskytt          = 0.001 * helpers.Sint(Esky_(J_t),wl(J_t)); %Thermal Sky fluxes
         Etott           = Eskytt + Esuntt;                  %Total
         fEsunt(J_t)     = Esun_(J_t)/Etott;                 %fraction from Esun
         fEskyt(J_t)     = Esky_(J_t)/Etott;                 %fraction from Esky
