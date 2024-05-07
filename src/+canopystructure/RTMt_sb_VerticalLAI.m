@@ -1,4 +1,4 @@
-function [rad] = RTMt_sb(constants,rad,soil,leafbio,canopy,gap,Tcu,Tch,Tsu,Tsh,obsdir,spectral)
+function [rad] = RTMt_sb_VerticalLAI(constants,rad,soil,leafbio,canopy,gap,Tcu,Tch,Tsu,Tsh,obsdir,spectral)
 
 % function 'RTMt_sb' calculates total outgoing radiation in hemispherical
 % direction and total absorbed radiation per leaf and soil component.
@@ -8,6 +8,7 @@ function [rad] = RTMt_sb(constants,rad,soil,leafbio,canopy,gap,Tcu,Tch,Tsu,Tsh,o
 % calculation for each wavelength separately.
 %
 % Authors: Wout Verhoef and Christiaan van der Tol (c.vandertol@utwente.nl)
+%          Danyang Yu
 % date:     5  Nov 2007
 % update:   13 Nov 2007
 %           16 Nov 2007 CvdT    improved calculation of net radiation
@@ -20,6 +21,7 @@ function [rad] = RTMt_sb(constants,rad,soil,leafbio,canopy,gap,Tcu,Tch,Tsu,Tsh,o
 %              Feb 2013 WV      introduces structures for version 1.40
 %           04 Dec 2019 CvdT    adapted for SCOPE-lite
 %           17 Mar 2020 CvdT    mSCOPE representation
+%           06 May 2024 CvdT    Introduced heterogeneous canopy layers
 %
 % Table of contents of the function
 %   0       preparations
@@ -72,11 +74,11 @@ epsc        = 1-rho-tau;              % [nwl]               Emissivity vegetatio
 epss        = 1-rs;                   % [nwl]               Emissivity soil
 LAI         = canopy.LAI;
 dx          = 1/nl;
-iLAI        = LAI*dx;
+iLAI        = LAI*canopy.VerticalProbability(:,2);
 
 Xdd         = rad.Xdd(:,end);
 Xsd         = rad.Xsd(:,end);
-Xss         = repmat(rad.Xss,canopy.nlayers,1);
+Xss         = rad.Xss;
 R_dd        = rad.R_dd(:,end);
 R_sd        = rad.R_sd(:,end);
 rho_dd      = rad.rho_dd(:,end);
@@ -109,8 +111,8 @@ Es_(1)              =   0;
 Emin(1)            =   0;
 
 for j=nl:-1:1      % from bottom to top
-    Y(j)  =   (rho_dd(j).*U(j+1)+Hc(j)*iLAI)./(1-rho_dd(j).*R_dd(j+1));
-    U(j)  =   tau_dd(j)*(R_dd(j+1).*Y(j)+U(j+1))+Hc(j)*iLAI;
+    Y(j)  =   (rho_dd(j).*U(j+1)+Hc(j)*iLAI(j))./(1-rho_dd(j).*R_dd(j+1));
+    U(j)  =   tau_dd(j)*(R_dd(j+1).*Y(j)+U(j+1))+Hc(j)*iLAI(j);
 end
 for j=1:nl       % from top to bottom
     Es_(j+1)    = Xss(j).*Es_(j);
