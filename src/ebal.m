@@ -350,7 +350,7 @@ function [iter, fluxes, rad, thermal, profiles, soil, RWU, frac]             ...
             if abs(PSI - PSI1) < 0.01
                 break
             end
-            PSI  = (PSI + PSI1) / 2;
+            PSI  = (PSI + PSI1) / 2;         %update the leaf water potential
         end
 
         %%%%%%%
