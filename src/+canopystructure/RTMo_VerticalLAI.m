@@ -1,4 +1,4 @@
-function [rad,gap,canopy,profiles] = RTMo_VerticalLAI(spectral,atmo,soil,leafopt,canopy,angles,constants,meteo,options)
+function [rad,gap,canopy,profiles] = RTMo_VerticalLAI(spectral,atmo,soil,leafopt,canopy,angles,constants,meteo,options,profiles)
 % calculates the spectra of hemisperical and directional observed visible 
 % and thermal radiation (fluxes E and radiances L), as well as the single 
 % and bi-directional gap probabilities
@@ -215,7 +215,7 @@ rho_dd = sigb.*iLAI;
 [R_sd,R_dd,Xss,Xsd,Xdd] = calc_reflectances(tau_ss,tau_sd,tau_dd,rho_dd,rho_sd,rs,nl,nwl); %calculated by Eq.18 in Yang et al. (2020).
 rdd     = R_dd(1,:)';
 rsd     = R_sd(1,:)';
-[Esun_,Esky_] = calcTOCirr(atmo,meteo,rdd,rsd,wl,nwl);
+[Esun_,Esky_,rad] = calcTOCirr(atmo,meteo,rdd,rsd,wl,nwl);
 
 [Emins_,Eplus_] = calc_fluxprofile(Esun_,0*Esky_,rs,Xss,Xsd,Xdd,R_sd,R_dd,nl,nwl);
 [Emind_,Eplud_] = calc_fluxprofile(0*Esun_,Esky_,rs,Xss,Xsd,Xdd,R_sd,R_dd,nl,nwl);
@@ -228,8 +228,11 @@ cLAI        =   vertcat(cLAI,LAI);              %   [nl+1]       all levels + so
 
 Ps          =   exp(-k*cLAI) ;                                              % [nl+1]  p154{1} probability of viewing a leaf in solar dir
 Po          =   exp(-K*cLAI) ;
-Ps(1:nl)    =   Ps(1:nl) *(1-exp(-k*LAI*dx))/(k*LAI*dx);                                      % Correct Ps/Po for finite dx
-Po(1:nl)    =   Po(1:nl) *(1-exp(-K*LAI*dx))/(K*LAI*dx);  % Correct Ps/Po for finite dx
+Ps(iLAI>0)    =   Ps(iLAI>0).*(1-exp(-k.*iLAI(iLAI>0)))./(k*iLAI(iLAI>0));  % Correct Ps/Po for finite dx if iLAI>0
+Po(iLAI>0)    =   Po(iLAI>0).*(1-exp(-K.*iLAI(iLAI>0)))./(K*iLAI(iLAI>0));  % Correct Ps/Po for finite dx if iLAI>0
+
+% Ps(1:nl)    =   Ps(1:nl) *(1-exp(-k*LAI*dx))/(k*LAI*dx);                                      % Correct Ps/Po for finite dx
+% Po(1:nl)    =   Po(1:nl) *(1-exp(-K*LAI*dx))/(K*LAI*dx);  % Correct Ps/Po for finite dx
 q           =   canopy.hot;
 Pso         =   zeros(size(Po));
 for j=1:length(xl)
@@ -265,7 +268,7 @@ piLocu_     = (sum(vb.*Po(1:nl).*Emins_(1:nl,:).*iLAI) +...
 piLosu_     = rs.* (Emins_(end,:)'*Po(end) + Esun_*Pso(end)); 
 
 piLod_      = piLocd_ + piLosd_;        % [nwl] piRad in obsdir from Esky
-piLou_      = piLocu_ + piLosu_;        % [nwl] piRad in obsdir from Eskun
+piLou_      = piLocu_ + piLosu_;        % [nwl] piRad in obsdir from Esun
 piLoc_      = piLocu_ + piLocd_;        % [nwl] piRad in obsdir from vegetation
 piLos_      = piLosu_ + piLosd_;        % [nwl] piRad in obsdir from soil
 
@@ -470,7 +473,7 @@ rad.Rnh_Car = Rnhc_Car; % [60x1 double]    net PAR absorbed by Cab (W m-2) of sh
 rad.Rnu_Car = Rnuc_Car; % [13x36x60 double] net PAR absorbed by Cab (W m-2) of sunlit leaves
 rad.Rnh_PAR = Rnhc_PAR;     % [60x1 double]     net PAR absorbed by Cab (W m-2) of shaded leaves
 rad.Rnu_PAR = Rnuc_PAR;     % [13x36x60 double] net PAR absorbed (W m-2) of sunlit
-rad.Xdd     =   Xdd;
+rad.Xdd     = Xdd;
 rad.Xsd     = Xsd;
 rad.Xss     = Xss;
 
@@ -623,7 +626,7 @@ Eplu_(j+1,:)    =   rs'.*(Es_(j+1,:)+Emin_(j+1,:));
 return;
 
 
-function [Esun_,Esky_] = calcTOCirr(atmo,meteo,rdd,rsd,wl,nwl)
+function [Esun_,Esky_,rad] = calcTOCirr(atmo,meteo,rdd,rsd,wl,nwl,rad)
 % calculation of incoming light Esun_ and Esky_
 % Extract MODTRAN atmosphere parameters at the SCOPE wavelengths
 
@@ -675,10 +678,16 @@ if ~isfield(atmo,'Esun_')
         Esky_(J_o) = fEskyo(J_o)*meteo.Rin;
         Esun_(J_t) = fEsunt(J_t)*meteo.Rli;
         Esky_(J_t) = fEskyt(J_t)*meteo.Rli;
+
+        rad.fEsuno  = fEsuno;   % [2162x1 double]   normalized spectrum of direct light (optical)
+        rad.fEskyo  = fEskyo;   % [2162x1 double]   normalized spectrum of diffuse light (optical)
+        rad.fEsunt  = fEsunt;   % [2162x1 double]   normalized spectrum of direct light (thermal)
+        rad.fEskyt  = fEskyt;   % [2162x1 double]   normalized spectrum of diffuse light (thermal)
     end
     
 else
     Esun_ = atmo.Esun_;
     Esky_ = atmo.Esky_;
+    rad   = [];
 end
 return;

@@ -148,7 +148,7 @@ if strcmp(bmiMode, "initialize") || strcmp(runMode, "full")
     canopy.litab    = [5:10:75 81:2:89]';   % a column, never change the angles unless 'ladgen' is also adapted
     canopy.lazitab  = (5:10:355);           % a row
 
-    options.calc_canopy_structure = 1;      
+    options.calc_canopy_structure = 1;
     if options.calc_canopy_structure        % consider the vertical distribution of LAI
         canopy.VerticalProbability = load([path_input,'cropgrowth/CanopyStructure.txt']);
     end
@@ -325,8 +325,11 @@ if strcmp(bmiMode, 'update') || strcmp(runMode, 'full')
     end
 
     % Will do one timestep in "update mode", and run until the end if in "full run" mode.
+    endTime = 48;
     while KT < endTime
         KT = KT + 1;  % Counting Number of timesteps
+        fprintf('KT=%d\n',KT);
+
         if KT > 1 && Delt_t > (TEND - TIME)
             Delt_t = TEND - TIME;  % If Delt_t is changed due to excessive change of state variables, the judgement of the last time step is excuted.
         end
@@ -446,7 +449,7 @@ if strcmp(bmiMode, 'update') || strcmp(runMode, 'full')
                 atmo.Ta     = meteo.Ta;
                 
                 if options.calc_canopy_structure         % consider the vertical distribution of LAI                    
-                    [rad, gap, profiles]   = canopystructure.RTMo_VerticalLAI(spectral, atmo, soil, leafopt, canopy, angles, Constants, meteo, options);
+                    [rad,gap,canopy,profiles]   = canopystructure.RTMo_VerticalLAI(spectral, atmo, soil, leafopt, canopy, angles, Constants, meteo, options);
                 else                                     % Assume the canopy layers to be homogeneous
                     [rad, gap, profiles]   = RTMo(spectral, atmo, soil, leafopt, canopy, angles, meteo, rad, options);
                 end
@@ -460,7 +463,7 @@ if strcmp(bmiMode, 'update') || strcmp(runMode, 'full')
                         if options.calc_fluor
                             if options.calc_vert_profiles
                                 if options.calc_canopy_structure    % consider the vertical distribution of LAI
-                                    [rad]           = RTMf_VerticalLAI(Constants,spectral,rad,soil,leafopt,canopy,gap,angles,profiles);
+                                    [rad, profiles] = canopystructure.RTMf_VerticalLAI(Constants,spectral,rad,soil,leafopt,canopy,gap,angles,profiles);
                                 else 
                                     [rad, profiles] = RTMf(spectral, rad, soil, leafopt, canopy, gap, angles, profiles);
                                 end
@@ -473,7 +476,11 @@ if strcmp(bmiMode, 'update') || strcmp(runMode, 'full')
                         end
 
                         if options.calc_planck
-                            rad         = RTMt_planck(spectral, rad, soil, leafopt, canopy, gap, angles, thermal.Tcu, thermal.Tch, thermal.Ts(2), thermal.Ts(1), 1);
+                            if options.calc_canopy_structure    % consider the vertical distribution of LAI
+                                rad         = canopystructure.RTMt_planck_VerticalLAI(spectral, rad, soil, leafopt, canopy, gap, thermal.Tcu, thermal.Tch, thermal.Ts(2), thermal.Ts(1));
+                            else
+                                rad         = RTMt_planck(spectral, rad, soil, leafopt, canopy, gap, angles, thermal.Tcu, thermal.Tch, thermal.Ts(2), thermal.Ts(1), 1);
+                            end
                         end
 
                         if options.calc_directional
@@ -489,16 +496,38 @@ if strcmp(bmiMode, 'update') || strcmp(runMode, 'full')
                             profiles.etah = ones(nl, 1);
                             profiles.etau = ones(13, 36, nl);
                             if options.calc_vert_profiles
-                                [rad, profiles] = RTMf(spectral, rad, soil, leafopt, canopy, gap, angles, profiles);
+                                if options.calc_canopy_structure    % consider the vertical distribution of LAI
+                                    [rad, profiles] = canopystructure.RTMf_VerticalLAI(Constants,spectral,rad,soil,leafopt,canopy,gap,angles,profiles);
+                                else
+                                    [rad, profiles] = RTMf(spectral, rad, soil, leafopt, canopy, gap, angles, profiles);
+                                end
                             else
                                 [rad] = RTMf(spectral, rad, soil, leafopt, canopy, gap, angles, profiles);
                             end
                         end
                 end
+
                 if options.calc_fluor % total emitted fluorescence irradiance (excluding leaf and canopy re-absorption and scattering)
-                    if options.calc_PSI
+                    if options.calc_canopy_structure
+%                         ep              = Constants.A*ephoton(spectral.wlF'*1E-9,Constants);
+                        rad.PoutFrc     = leafbio.fqe*fluxes.aPAR_Cab_eta;
+                        rad.EoutFrc_    = 1E-3*rad.ep.*(rad.PoutFrc*optipar.phi(spectral.IwlF)); %1E-6: umol2mol, 1E3: nm-1 to um-1
+                        rad.EoutFrc     = 1E-3*helpers.Sint(rad.EoutFrc_,spectral.wlF);
+                        sigmaF          = pi*rad.LoF_./rad.EoutFrc_;
+                        rad.sigmaF      = interp1(spectral.wlF(1:4:end),sigmaF(1:4:end),spectral.wlF);
+                        canopy.fqe      = rad.PoutFrc./fluxes.aPAR_Cab; 
+
+                        rad.Lotot_      = rad.Lo_+rad.Lot_;
+                        rad.Eout_       = rad.Eout_+rad.Eoutte_;
+                        rad.Lototf_     = rad.Lotot_;
+                        rad.Lototf_(spectral.IwlF') = rad.Lototf_(spectral.IwlF)+rad.LoF_;
+                        rad.reflapp = rad.refl;
+                        rad.reflapp(spectral.IwlF) =pi*rad.Lototf_(spectral.IwlF)./(rad.Esun_(spectral.IwlF)+rad.Esky_(spectral.IwlF));
+                    end
+
+                    if ~options.calc_canopy_structure && options.calc_PSI  
                         rad.Femtot = 1E3 * (leafbio.fqe(2) * optipar.phiII(spectral.IwlF) * fluxes.aPAR_Cab_eta + leafbio.fqe(1) * optipar.phiI(spectral.IwlF)  * fluxes.aPAR_Cab);
-                    else
+                    elseif ~options.calc_canopy_structure && ~options.calc_PSI
                         rad.Femtot = 1E3 * leafbio.fqe * optipar.phi(spectral.IwlF) * fluxes.aPAR_Cab_eta;
                     end
                 end

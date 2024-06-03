@@ -130,57 +130,136 @@ function n_col = output_data_binary(f, k, xyt, rad,  canopy, ScopeParameters, vi
 
         end
         if options.calc_fluor
-            layer_fluorescence_out  =  [profiles.fluorescence'];
+            layer_fluorescence_out  =  [profiles.fluorescence];
             n_col.layer_fluorescence = length(layer_fluorescence_out);
             fwrite(f.layer_fluorescence_file, layer_fluorescence_out, 'double');
         end
     end
 
-    if options.calc_fluor % && options.calc_ebal
-        for j = 1:size(spectral.wlF, 1)
-            fluorescence_out  =  [rad.LoF_];
-            n_col.fluorescence = length(fluorescence_out);
-            fwrite(f.fluorescence_file, fluorescence_out, 'double');
+    %% Fluorescence scalar outputs
+    if options.calc_fluor
+        if options.calc_canopy_structure
+            fluor_out = [rad.F685  rad.wl685 rad.F740 rad.wl740 rad.F684 rad.F761 ...
+                rad.LoutF rad.Eoutf rad.EoutFrc];
+            n_col.fluor = length(fluor_out);
+            fwrite(f.fluor_file,fluor_out,'double');
+        
+            %% Fluorescence spectral outputs
+            % fluorescence radiance (L) in observation direction [mW m-2 nm-1 sr-1]
+            n_col.fluor_spectrum = length(rad.LoF_);
+            fwrite(f.fluor_spectrum_file, rad.LoF_, 'double');
+        
+            n_col.sigmaF = length(rad.sigmaF);
+            fwrite(f.sigmaF_file, rad.sigmaF, 'double');
+        
+            n_col.fRC = length(rad.EoutFrc_);
+            fwrite(f.fRC_file, rad.EoutFrc_, 'double');
+        
+            n_col.fRCL = length(rad.Femleaves_);
+            fwrite(f.fRCL_file, rad.Femleaves_, 'double');
+        
+            n_col.fhemis = length(rad.EoutF_);
+            fwrite(f.fhemis_file,rad.EoutF_, 'double');
+        
+            n_col.Lo2 = length(rad.Lototf_);
+            fwrite(f.Lo2_file, rad.Lototf_,'double');
+        
+            n_col.rapp = length(rad.reflapp);
+            fwrite(f.rapp_file, rad.reflapp,'double');
+        else
+            for j = 1:size(spectral.wlF, 1)
+                fluorescence_out  =  [rad.LoF_];
+                n_col.fluorescence = length(fluorescence_out);
+                fwrite(f.fluorescence_file, fluorescence_out, 'double');
 
-            if options.calc_PSI
-                fluorescencePSI_out  =  [rad.LoF1_];
-                n_col.fluorescencePSI = length(fluorescencePSI_out);
-                fwrite(f.fluorescencePSI_file, fluorescencePSI_out, 'double');
+                if options.calc_PSI
+                    fluorescencePSI_out  =  [rad.LoF1_];
+                    n_col.fluorescencePSI = length(fluorescencePSI_out);
+                    fwrite(f.fluorescencePSI_file, fluorescencePSI_out, 'double');
+    
+                    fluorescencePSII_out  =  [rad.LoF2_];
+                    n_col.fluorescencePSII = length(fluorescencePSII_out);
+                    fwrite(f.fluorescencePSII_file, fluorescencePSII_out, 'double');
+                end
 
-                fluorescencePSII_out  =  [rad.LoF2_];
-                n_col.fluorescencePSII = length(fluorescencePSII_out);
-                fwrite(f.fluorescencePSII_file, fluorescencePSII_out, 'double');
+                fluorescence_hemis_out  =  [rad.Fhem_];
+                n_col.fluorescence_hemis = length(fluorescence_hemis_out);
+                fwrite(f.fluorescence_hemis_file, fluorescence_hemis_out, 'double');
+    
+                fluorescence_emitted_by_all_leaves_out  =  [rad.Fem_];
+                n_col.fluorescence_emitted_by_all_leaves = length(fluorescence_emitted_by_all_leaves_out);
+                fwrite(f.fluorescence_emitted_by_all_leaves_file, fluorescence_emitted_by_all_leaves_out, 'double');
+    
+                fluorescence_emitted_by_all_photosystems_out  =  [rad.Femtot];
+                n_col.fluorescence_emitted_by_all_photosystems = length(fluorescence_emitted_by_all_photosystems_out);
+                fwrite(f.fluorescence_emitted_by_all_photosystems_file, fluorescence_emitted_by_all_photosystems_out, 'double');
+    
+                fluorescence_sunlit_out  =  [sum(rad.LoF_sunlit, 2)];
+                n_col.fluorescence_sunlit = length(fluorescence_sunlit_out);
+                fwrite(f.fluorescence_sunlit_file, fluorescence_sunlit_out, 'double');
+    
+                fluorescence_shaded_out  =  [sum(rad.LoF_shaded, 2)];
+                n_col.fluorescence_shaded = length(fluorescence_shaded_out);
+                fwrite(f.fluorescence_shaded_file, fluorescence_shaded_out, 'double');
+    
+                fluorescence_scattered_out  =  [sum(rad.LoF_scattered, 2) + sum(rad.LoF_soil, 2)];
+                n_col.fluorescence_scattered = length(fluorescence_scattered_out);
+                fwrite(f.fluorescence_scattered_file, fluorescence_scattered_out, 'double');
             end
-
-            fluorescence_hemis_out  =  [rad.Fhem_];
-            n_col.fluorescence_hemis = length(fluorescence_hemis_out);
-            fwrite(f.fluorescence_hemis_file, fluorescence_hemis_out, 'double');
-
-            fluorescence_emitted_by_all_leaves_out  =  [rad.Fem_];
-            n_col.fluorescence_emitted_by_all_leaves = length(fluorescence_emitted_by_all_leaves_out);
-            fwrite(f.fluorescence_emitted_by_all_leaves_file, fluorescence_emitted_by_all_leaves_out, 'double');
-
-            fluorescence_emitted_by_all_photosystems_out  =  [rad.Femtot];
-            n_col.fluorescence_emitted_by_all_photosystems = length(fluorescence_emitted_by_all_photosystems_out);
-            fwrite(f.fluorescence_emitted_by_all_photosystems_file, fluorescence_emitted_by_all_photosystems_out, 'double');
-
-            fluorescence_sunlit_out  =  [sum(rad.LoF_sunlit, 2)];
-            n_col.fluorescence_sunlit = length(fluorescence_sunlit_out);
-            fwrite(f.fluorescence_sunlit_file, fluorescence_sunlit_out, 'double');
-
-            fluorescence_shaded_out  =  [sum(rad.LoF_shaded, 2)];
-            n_col.fluorescence_shaded = length(fluorescence_shaded_out);
-            fwrite(f.fluorescence_shaded_file, fluorescence_shaded_out, 'double');
-
-            fluorescence_scattered_out  =  [sum(rad.LoF_scattered, 2) + sum(rad.LoF_soil, 2)];
-            n_col.fluorescence_scattered = length(fluorescence_scattered_out);
-            fwrite(f.fluorescence_scattered_file, fluorescence_scattered_out, 'double');
-
         end
     end
+    
     BOC_irradiance_out  =  [rad.Emin_(canopy.nlayers + 1, :), rad.Emin_(canopy.nlayers + 1, :) + (rad.Esun_ * gap.Ps(canopy.nlayers + 1)')'];
     n_col.BOC_irradiance = length(BOC_irradiance_out);
     fwrite(f.BOC_irradiance_file, BOC_irradiance_out, 'double');
+
+  
+
+%     if options.calc_fluor % && options.calc_ebal
+%         for j = 1:size(spectral.wlF, 1)
+%             fluorescence_out  =  [rad.LoF_];
+%             n_col.fluorescence = length(fluorescence_out);
+%             fwrite(f.fluorescence_file, fluorescence_out, 'double');
+% 
+%             if options.calc_PSI
+%                 fluorescencePSI_out  =  [rad.LoF1_];
+%                 n_col.fluorescencePSI = length(fluorescencePSI_out);
+%                 fwrite(f.fluorescencePSI_file, fluorescencePSI_out, 'double');
+% 
+%                 fluorescencePSII_out  =  [rad.LoF2_];
+%                 n_col.fluorescencePSII = length(fluorescencePSII_out);
+%                 fwrite(f.fluorescencePSII_file, fluorescencePSII_out, 'double');
+%             end
+% 
+%             fluorescence_hemis_out  =  [rad.Fhem_];
+%             n_col.fluorescence_hemis = length(fluorescence_hemis_out);
+%             fwrite(f.fluorescence_hemis_file, fluorescence_hemis_out, 'double');
+% 
+%             fluorescence_emitted_by_all_leaves_out  =  [rad.Fem_];
+%             n_col.fluorescence_emitted_by_all_leaves = length(fluorescence_emitted_by_all_leaves_out);
+%             fwrite(f.fluorescence_emitted_by_all_leaves_file, fluorescence_emitted_by_all_leaves_out, 'double');
+% 
+%             fluorescence_emitted_by_all_photosystems_out  =  [rad.Femtot];
+%             n_col.fluorescence_emitted_by_all_photosystems = length(fluorescence_emitted_by_all_photosystems_out);
+%             fwrite(f.fluorescence_emitted_by_all_photosystems_file, fluorescence_emitted_by_all_photosystems_out, 'double');
+% 
+%             fluorescence_sunlit_out  =  [sum(rad.LoF_sunlit, 2)];
+%             n_col.fluorescence_sunlit = length(fluorescence_sunlit_out);
+%             fwrite(f.fluorescence_sunlit_file, fluorescence_sunlit_out, 'double');
+% 
+%             fluorescence_shaded_out  =  [sum(rad.LoF_shaded, 2)];
+%             n_col.fluorescence_shaded = length(fluorescence_shaded_out);
+%             fwrite(f.fluorescence_shaded_file, fluorescence_shaded_out, 'double');
+% 
+%             fluorescence_scattered_out  =  [sum(rad.LoF_scattered, 2) + sum(rad.LoF_soil, 2)];
+%             n_col.fluorescence_scattered = length(fluorescence_scattered_out);
+%             fwrite(f.fluorescence_scattered_file, fluorescence_scattered_out, 'double');
+% 
+%         end
+%     end
+%     BOC_irradiance_out  =  [rad.Emin_(canopy.nlayers + 1, :), rad.Emin_(canopy.nlayers + 1, :) + (rad.Esun_ * gap.Ps(canopy.nlayers + 1)')'];
+%     n_col.BOC_irradiance = length(BOC_irradiance_out);
+%     fwrite(f.BOC_irradiance_file, BOC_irradiance_out, 'double');qe
 
     %%
     if options.calc_directional && options.calc_ebal

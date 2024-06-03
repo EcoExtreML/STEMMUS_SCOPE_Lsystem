@@ -68,14 +68,14 @@ nl          = canopy.nlayers;
 lidf        = canopy.lidf;
 Ps          = gap.Ps;
 %
-rho         = leafopt.refl(:, IT)';    % [1]               Leaf/needle reflection
-tau         = leafopt.tran(:, IT)';    % [1]               Leaf/needle transmission
+rho         = repmat(leafopt.refl(IT)',nl,1);    % [1]               Leaf/needle reflection
+tau         = repmat(leafopt.tran(IT)',nl,1);    % [1]               Leaf/needle transmission
 rs          = soil.refl(IT);        % [1]               Soil reflectance
 epsc        = 1-rho-tau;              % [nwl]               Emissivity vegetation
 epss        = 1-rs;                   % [nwl]               Emissivity soil
 LAI         = canopy.LAI;
 dx          = 1/nl;
-iLAI        = LAI*dx;
+iLAI        = LAI*canopy.VerticalProbability(:,2);
 
 Xdd         = rad.Xdd(:,IT);
 Xsd         = rad.Xsd(:,IT);
@@ -93,10 +93,10 @@ tau_dd      = rad.tau_dd(:,IT);
 
 for i = 1:length(IT)
     % 1.1 radiance by components
-    Hcsu3          = pi*Planck(wlt(i),Tcu+273.15,epsc(i));
-    Hcsh           = pi*Planck(wlt(i),Tch+273.15,epsc(i));
-    Hssu           = pi*Planck(wlt(i),Tsu+273.15,epss(i));
-    Hssh           = pi*Planck(wlt(i),Tsh+273.15,epss(i));
+    Hcsu3          = pi*equations.Planck(wlt(i),Tcu+273.15,epsc(i));
+    Hcsh           = pi*equations.Planck(wlt(i),Tch+273.15,epsc(i));
+    Hssu           = pi*equations.Planck(wlt(i),Tsu+273.15,epss(i));
+    Hssh           = pi*equations.Planck(wlt(i),Tsh+273.15,epss(i));
     % 1.2 radiance by leaf layers Hv and by soil Hs (modified by JAK 2015-01)
     if size(Hcsu3,2)>1
         v1 = repmat( 1/size(Hcsu3, 2), 1, size(Hcsu3, 2)); % vector for computing the mean
@@ -116,8 +116,8 @@ for i = 1:length(IT)
     Emin(1)            =   0;
     
     for j=nl:-1:1      % from bottom to top
-        Y(j)  =   (rho_dd(j).*U(j+1)+Hc(j)*iLAI)./(1-rho_dd(j).*R_dd(j+1));
-        U(j)  =   tau_dd(j)*(R_dd(j+1).*Y(j)+U(j+1))+Hc(j)*iLAI;
+        Y(j)  =   (rho_dd(j).*U(j+1)+Hc(j)*iLAI(j))./(1-rho_dd(j).*R_dd(j+1));
+        U(j)  =   tau_dd(j)*(R_dd(j+1).*Y(j)+U(j+1))+Hc(j)*iLAI(j);
     end
     for j=1:nl       % from top to bottom
         Es_(j+1)    =   Xss(j).*Es_(j);
@@ -135,10 +135,15 @@ for i = 1:length(IT)
     K           = gap.K;
     vb          = rad.vb(end);
     vf          = rad.vf(end);
-    piLov       = iLAI*...
-       (K*Hcsh'*(gap.Po(1:nl)-gap.Pso(1:nl))+  ...              % directional   emitted     radation by shaded leaves
-       K*Hcsu'*gap.Pso(1:nl)+ ... % compute column means for each level
-       (vb*Emin(1:nl) + vf*Eplu(1:nl))'*gap.Po(1:nl));      % directional   scattered   radiation by vegetation for diffuse incidence   
+
+%     piLov       = iLAI*...
+%        (K*Hcsh'*(gap.Po(1:nl)-gap.Pso(1:nl))+  ...              % directional   emitted     radation by shaded leaves
+%        K*Hcsu'*gap.Pso(1:nl)+ ... % compute column means for each level
+%        (vb*Emin(1:nl) + vf*Eplu(1:nl))'*gap.Po(1:nl));      % directional   scattered   radiation by vegetation for diffuse incidence
+
+    piLov       = (K*Hcsh'*((gap.Po(1:nl)-gap.Pso(1:nl)).*iLAI)+  ...              % directional   emitted     radation by shaded leaves
+                   K*Hcsu'*(gap.Pso(1:nl).*iLAI)+ ... % compute column means for each level
+                   (vb*Emin(1:nl) + vf*Eplu(1:nl))'*(gap.Po(1:nl).*iLAI));
    
     piLos       = (Hssh*(gap.Po(nl+1)-gap.Pso(nl+1))+ Hssu*gap.Pso(nl+1)); % directional   emitted     radiation by soil
         

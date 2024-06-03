@@ -98,13 +98,15 @@ function bin_to_csv(fnames, n_col, ns, options, SoilLayer)
             write_output({'net radiation per leaf layer'}, {'W m-2'}, ...
                          fnames.layer_Rn_file, n_col.layer_Rn, ns, true);
         end
-        if options.calc_fluor
+        if options.calc_fluor && ~options.calc_canopy_structure
             fluorescence_names = {'supward fluorescence per layer'};
             fluorescence_units = {'W m-2'};
             write_output(fluorescence_names, fluorescence_units, fnames.layer_fluorescence_file, n_col.layer_fluorescence, ns, true);
         end
     end
-    if options.calc_fluor
+
+    %% fluor
+    if options.calc_fluor && ~options.calc_canopy_structure
         write_output({'fluorescence per simulation for wavelengths of 640 to 850 nm, with 1 nm resolution'}, {'W m-2 um-1 sr-1'}, ...
                      fnames.fluorescence_file, n_col.fluorescence, ns, true);
         if options.calc_PSI
@@ -126,6 +128,34 @@ function bin_to_csv(fnames, n_col, ns, options, SoilLayer)
         write_output({'TOC fluorescence contribution from from leaves and soil after scattering for wavelenghts of 640 to 850 nm, with 1 nm resolution'}, {'W m-2 um-1 sr-1'}, ...
                      fnames.fluorescence_scattered_file, n_col.fluorescence_scattered, ns, true);
     end
+
+    if options.calc_fluor && options.calc_canopy_structure
+        fluor_names = {'F_1stpeak', 'wl_1stpeak', 'F_2ndpeak', 'wl_2ndpeak', 'F684', 'F761', 'LFtot', 'EFtot', 'EFtot_RC'};
+        fluor_units = {'W m-2 um-1 sr-1','nm','W m-2 um-1 sr-1','nm','W m-2 um-1 sr-1','W m-2 um-1 sr-1','W m-2 sr-1','W m-2','W m-2'};
+        write_output(fluor_names, fluor_units, fnames.fluor_file, n_col.fluor, ns)
+    
+        write_output({'fluorescence_spectrum 640:1:850 nm'}, {'W m-2 um-1 sr-1'}, ...
+            fnames.fluor_spectrum_file, n_col.fluor_spectrum, ns, true)
+    
+        write_output({'escape probability 640:1:850 nm'}, {''}, ...
+            fnames.sigmaF_file, n_col.sigmaF, ns, true)
+    
+        write_output({'fluorescence_spectrum 640:1:850 nm hemispherically integrated'}, {'W m-2 um-1'}, ...
+            fnames.fhemis_file, n_col.fhemis, ns, true)
+    
+        write_output({'fluorescence_spectrum 640:1:850 nm reabsorption corrected'}, {'W m-2 um-1'}, ...
+            fnames.fRC_file, n_col.fhemis, ns, true)
+    
+        write_output({'fluorescence_spectrum 640:1:850 nm emission by all leaves'}, {'W m-2 um-1'}, ...
+            fnames.fRCL_file, n_col.fhemis, ns, true)
+    
+        write_output({'upwelling radiance including fluorescence'}, {'W m-2 um-1 sr-1'}, ...
+            fnames.Lo2_file, n_col.Lo2, ns, true)
+    
+        write_output({'apparent reflectance'}, {''}, ...
+            fnames.rapp_file, n_col.rapp, ns, true)
+    end
+
     write_output({'Bottom of canopy irradiance in the shaded fraction, and average BOC irradiance'}, {'First 2162 columns: shaded fraction. Last 2162 columns: average BOC irradiance. Unit: Wm-2 um-1'}, ...
                  fnames.BOC_irradiance_file, n_col.BOC_irradiance, ns, true);
 

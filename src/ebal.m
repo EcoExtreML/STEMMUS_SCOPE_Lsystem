@@ -184,7 +184,7 @@ function [iter, fluxes, rad, thermal, profiles, soil, RWU, frac]             ...
         % 2.1. Net radiation of the components
         % Thermal radiative transfer model for vegetation emission (with Stefan-Boltzman's equation)
         if options.calc_canopy_structure
-            rad     = canopystructure.RTMt_sb_VerticalLAI(Constants,rad,soil,leafbio,canopy,gap,Tcu,Tch,Ts(2),Ts(1),0);
+            rad     = canopystructure.RTMt_sb_VerticalLAI(Constants,rad,soil,leafbio,canopy,gap,Tcu,Tch,Ts(2),Ts(1),1,spectral);
         else
             rad  = RTMt_sb(spectral, rad, soil, leafopt, canopy, gap, angles, Tcu, Tch, Ts(2), Ts(1), 1);
         end

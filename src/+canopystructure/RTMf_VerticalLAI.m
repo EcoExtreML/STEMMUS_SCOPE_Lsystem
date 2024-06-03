@@ -1,4 +1,4 @@
-function rad = RTMf_VerticalLAI(constants,spectral,rad,soil,leafopt,canopy,gap,angles,profiles)
+function [rad,profiles] = RTMf_VerticalLAI(constants,spectral,rad,soil,leafopt,canopy,gap,angles,profiles)
 
 % function 'RTMf' calculates the spectrum of fluorescent radiance in the
 % observer's direction and also the TOC spectral hemispherical upward Fs flux
@@ -58,8 +58,8 @@ function rad = RTMf_VerticalLAI(constants,spectral,rad,soil,leafopt,canopy,gap,a
 
 %% 0.1 initialisations
 wlS          = spectral.wlS';       % SCOPE wavelengths, make column vectors
-wlF          = (640:4:850)';%spectral.wlF';       % Fluorescence wavelengths
-wlE          =   (400:5:750)'; %spectral.wlE';    % Excitation wavelengths
+wlF          = spectral.wlF';       % Fluorescence wavelengths
+wlE          = spectral.wlE';       % Excitation wavelengths
 [dummy,iwlfi]    = intersect(wlS,wlE); %#ok<ASGLU>
 [dummy,iwlfo]    = intersect(wlS,wlF); %#ok<ASGLU>
 nf           = length(iwlfo);
@@ -72,6 +72,8 @@ nlazi        = length(lazitab);         % azumith angle
 nlinc        = length(litab);           % inclination
 nlori        = nlinc * nlazi;           % total number of leaf orientations
 layers       = 1:nl;
+etau         = profiles.etau;
+etah         = profiles.etah;
 
 Ps           = gap.Ps;
 Po           = gap.Po;
@@ -90,7 +92,7 @@ Qs          = Ps(1:end-1);
 Esunf_             = rad.Esun_(iwlfi);
 Eminf_             = rad.Emin_(:,iwlfi)';          % transpose into [nwlfo,nl] matrix
 Epluf_             = rad.Eplu_(:,iwlfi)';
-iLAI               = LAI/nl;                       % LAI of a layer        [1]
+iLAI               = LAI*canopy.VerticalProbability(:,2);                       % LAI of a layer        [1]
 
 Xdd         = rad.Xdd(:,iwlfo);
 rho_dd      = rad.rho_dd(:,iwlfo);
@@ -100,8 +102,8 @@ vb          = rad.vb(:,iwlfo);
 vf          = rad.vf(:,iwlfo);
 
 %% 0.2 geometric quantities
-Mb                = leafopt.Mb;
-Mf                = leafopt.Mf;
+Mb                = repmat(leafopt.Mb,[1,1,nl]);
+Mf                = repmat(leafopt.Mf,[1,1,nl]);
 
 % geometric factors
 deg2rad             = constants.deg2rad;
@@ -146,7 +148,6 @@ ctl2                = reshape(ctl2,nlori,1);                                    
 
 % fluorescence matrices and efficiencies
 [U,Fmin_,Fplu_] =deal(zeros(nl+1,size(leafopt.Mb,1)));
-
 Mplu = 0.5*(Mb+Mf);    % [nwlfo,nwlfi]
 Mmin = 0.5*(Mb-Mf);    % [nwlfo,nwlfi]
 
@@ -209,8 +210,8 @@ Fsmin       =   sfEs+sigfEmin_u+sigbEplu_u;     % Eq. 29a for sunlit leaf
 Fsplu       =   sbEs+sigbEmin_u+sigfEplu_u;     % Eq. 29b for sunlit leaf
 Fdmin       =   sigfEmin_h+sigbEplu_h;          % Eq. 29a for shade leaf
 Fdplu       =   sigbEmin_h+sigfEplu_h;          % Eq. 29b for shade leaf
-Femmin      =   iLAI*bsxfun(@times,Qs', Fsmin) +iLAI* bsxfun(@times,(1-Qs)',Fdmin);
-Femplu      =   iLAI*bsxfun(@times,Qs', Fsplu) +iLAI* bsxfun(@times,(1-Qs)',Fdplu);
+Femmin      =   repmat(iLAI', size(Fsmin, 1),1).*bsxfun(@times,Qs', Fsmin) +repmat(iLAI', size(Fsmin, 1),1).* bsxfun(@times,(1-Qs)',Fdmin);
+Femplu      =   repmat(iLAI', size(Fsplu, 1),1).*bsxfun(@times,Qs', Fsplu) +repmat(iLAI', size(Fsplu, 1),1).* bsxfun(@times,(1-Qs)',Fdplu);
 
 for j=nl:-1:1      % from bottom to top
     Y(j,:)  =(rho_dd(j,:).*U(j+1,:)+Femmin(:,j)')./(1-rho_dd(j,:).*R_dd(j+1,:));
@@ -221,14 +222,20 @@ for j=1:nl          % from top to bottom
     Fmin_(j+1,:)  = Xdd(j,:).*Fmin_(j,:)+Y(j,:);
     Fplu_(j,:)  = R_dd(j,:).*Fmin_(j,:)+U(j,:);
 end
-piLo1     = iLAI*piLs*Pso(1:nl);
-piLo2     = iLAI*piLd*(Po(1:nl)-Pso(1:nl));
-piLo3     = iLAI*(vb.*Fmin_(layers,:)  + vf.*Fplu_(layers,:))'*Po(1:nl);
+piLo1     = piLs*(Pso(1:nl).*iLAI);
+piLo2     = piLd*((Po(1:nl)-Pso(1:nl)).*iLAI);
+piLo3     = (vb.*Fmin_(layers,:)  + vf.*Fplu_(layers,:))'*(Po(1:nl).*iLAI);
 piLo4     = rs .* Fmin_(nl+1,:)' * Po(nl+1);
 
 piLtot      = piLo1 + piLo2 + piLo3 + piLo4;
 LoF_        = piLtot/pi;
 Fhem_       = Fplu_(1,:)';
+
+% fluoresence over profiel
+for j=1:nl
+    Fiprofile(j) = 0.001 * helpers.Sint(Fplu_(j,:), spectral.wlF);
+end
+profiles.fluorescence   = Fiprofile;
 
 method = 'spline';  % M2020a name
 %if verLessThan('matlab', '9.8')
@@ -243,10 +250,11 @@ rad.LoF_shaded      = interp1(wlF,piLo2/pi,spectral.wlF',method);
 rad.LoF_scattered   = interp1(wlF,piLo3/pi,spectral.wlF',method);
 rad.LoF_soil        = interp1(wlF,piLo4/pi,spectral.wlF',method);
 
-rad.EoutF   = 0.001 * Sint(Fhem_,wlF);
-rad.LoutF   = 0.001 * Sint(LoF_,wlF);
+rad.Eoutf   = 0.001 * helpers.Sint(Fhem_,wlF);
+rad.LoutF   = 0.001 * helpers.Sint(LoF_,wlF);
 
 rad.Femleaves_ = interp1(wlF,sum(Femmin+Femplu,2),spectral.wlF',method);
+rad.ep         = ep;
 
 [rad.F685,iwl685]  = max(rad.LoF_(1:55));
 rad.wl685 = spectral.wlF(iwl685);
@@ -257,3 +265,22 @@ rad.F684  = rad.LoF_(685-spectral.wlF(1));
 rad.F761  = rad.LoF_(762-spectral.wlF(1));
 return
 
+%% APPENDIX II function e2phot
+
+function molphotons = e2phot(lambda,E,constants)
+%molphotons = e2phot(lambda,E) calculates the number of moles of photons
+%corresponding to E Joules of energy of wavelength lambda (m)
+
+e           = ephoton(lambda,constants);
+photons     = E./e;
+molphotons  = photons./constants.A;
+return;
+
+function E = ephoton(lambda,constants)
+%E = phot2e(lambda) calculates the energy content (J) of 1 photon of
+%wavelength lambda (m)
+
+h       = constants.h;           % [J s]         Planck's constant
+c       = constants.c;           % [m s-1]       speed of light
+E       = h*c./lambda;           % [J]           energy of 1 photon
+return;

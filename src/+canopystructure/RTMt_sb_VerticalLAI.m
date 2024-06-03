@@ -127,20 +127,24 @@ if obsdir
     K           = gap.K;
     vb          = rad.vb(end);
     vf          = rad.vf(end);
-    piLov       = iLAI*...
-        (K*Hcsh'*(gap.Po(1:nl)-gap.Pso(1:nl))+  ...              % directional   emitted     radation by shaded leaves
-        K*Hcsu'*gap.Pso(1:nl)+ ... % compute column means for each level
-        (vb*Emin(1:nl) + vf*Eplu(1:nl))'*gap.Po(1:nl));      % directional   scattered   radiation by vegetation for diffuse incidence
-    
+    %     piLov       = iLAI*...
+    %         (K*Hcsh'*(gap.Po(1:nl)-gap.Pso(1:nl))+  ...              % directional   emitted     radation by shaded leaves
+    %         K*Hcsu'*gap.Pso(1:nl)+ ... % compute column means for each level
+    %         (vb*Emin(1:nl) + vf*Eplu(1:nl))'*gap.Po(1:nl));      % directional   scattered   radiation by vegetation for diffuse incidence
+        
+    piLov       = (K*Hcsh'*((gap.Po(1:nl)-gap.Pso(1:nl)).*iLAI)+  ...              % directional   emitted     radation by shaded leaves
+                   K*Hcsu'*(gap.Pso(1:nl).*iLAI)+ ... % compute column means for each level
+                  (vb*Emin(1:nl) + vf*Eplu(1:nl))'*(gap.Po(1:nl).*iLAI));
+        
     piLos       = (Hssh*(gap.Po(nl+1)-gap.Pso(nl+1))+ Hssu*gap.Pso(nl+1));                        % directional   emitted     radiation by  soil
-
     
+        
     piLot       = piLov + piLos;
     Tbr         = (piLot/constants.sigmaSB)^0.25;
     rad.Lote    = piLot/pi;
-    rad.Lot_    = Planck(spectral.wlS,Tbr);% Note that this is the directional blackbody radiance!
+    rad.Lot_    = equations.Planck(spectral.wlS,Tbr)';% Note that this is the directional blackbody radiance!
     Tbr2        = (Eoutte/constants.sigmaSB)^0.25;
-    rad.Eoutte_ = Planck(spectral.wlS,Tbr2);
+    rad.Eoutte_ = equations.Planck(spectral.wlS,Tbr2)';
 end
 
 %% 2. total net fluxes

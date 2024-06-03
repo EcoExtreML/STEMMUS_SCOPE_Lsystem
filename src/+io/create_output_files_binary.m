@@ -82,6 +82,16 @@ function [Output_dir, fnames] = create_output_files_binary(parameter_file, siten
         fnames.fluorescence_sunlit_file       = fullfile(Output_dir, 'fluorescence_sunlit.bin');     % Fluorescence
         fnames.fluorescence_shaded_file       = fullfile(Output_dir, 'fluorescence_shaded.bin');     % Fluorescence
         fnames.fluorescence_scattered_file    = fullfile(Output_dir, 'fluorescence_scattered.bin');      % Fluorescence
+        if options.calc_canopy_structure
+            fnames.fluor_file              = fullfile(Output_dir,'fluorescence_scalars.bin');
+            fnames.fluor_spectrum_file     = fullfile(Output_dir,'fluorescence.bin');
+            fnames.sigmaF_file             = fullfile(Output_dir,'sigmaF.bin');
+            fnames.fhemis_file             = fullfile(Output_dir,'fluorescence_hemis.bin');
+            fnames.fRC_file                = fullfile(Output_dir,'fluorescence_ReabsCorr.bin');
+            fnames.fRCL_file               = fullfile(Output_dir,'fluorescence_AllLeaves.bin'); 
+            fnames.Lo2_file                = fullfile(Output_dir,'Lo_spectrum_inclF.bin');
+            fnames.rapp_file               = fullfile(Output_dir,'apparent_reflectance.bin');
+        end
     else
         delete([Output_dir, 'fluorescence.bin']);
     end
