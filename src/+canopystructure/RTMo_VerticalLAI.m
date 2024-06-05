@@ -118,7 +118,7 @@ lazitab = canopy.lazitab;       % leaf azimuth angles relative to the sun
 nlazi   = canopy.nlazi;         % number of azimuth angles (36)
 LAI     = canopy.LAI;           % leaf area index
 lidf    = canopy.lidf;          % leaf inclination distribution function
-xl      = canopy.xl;            % all levels except for the top
+% xl      = canopy.xl;            % all levels except for the top
 dx      = 1/nl;
 
 rho = repmat(leafopt.refl',nl,1);                  % [nl,nwl]   leaf reflectance
@@ -129,8 +129,8 @@ kCarrel = repmat(leafopt.kCarrel',nl,1);           % [nl,nwl]   Carotenoid conte
 rs      =   soil.refl;          % [nwl,nsoils] soil reflectance spectra
 epsc    =   1-rho-tau;          % [nl,nwl]     emissivity of leaves
 epss    =   1-rs;               % [nwl]        emissivity of soil
-iLAI    =   LAI*canopy.VerticalProbability(:,2);             % [nl]          LAI of elementary layer
-xl      =   vertcat(canopy.VerticalProbability(:,1),0)-1;
+xl      =   vertcat(canopy.VerticalProbability(:,1),-1);
+iLAI    =   vertcat(LAI*canopy.VerticalProbability(:,2));             % [nl]          LAI of elementary layer
 
 % initializations
 Rndif                       = zeros(nl,1);                 % [nl+1]         abs. diffuse rad soil+veg
@@ -230,6 +230,9 @@ Ps          =   exp(-k*cLAI) ;                                              % [n
 Po          =   exp(-K*cLAI) ;
 Ps(iLAI>0)    =   Ps(iLAI>0).*(1-exp(-k.*iLAI(iLAI>0)))./(k*iLAI(iLAI>0));  % Correct Ps/Po for finite dx if iLAI>0
 Po(iLAI>0)    =   Po(iLAI>0).*(1-exp(-K.*iLAI(iLAI>0)))./(K*iLAI(iLAI>0));  % Correct Ps/Po for finite dx if iLAI>0
+
+Ps(iLAI==0)    =   Ps(iLAI==0).*(1-exp(-k.*LAI*dx))./(k*LAI*dx);     % if iLAI==0,using LAI/nl to substiture iLAI
+Po(iLAI==0)    =   Po(iLAI==0).*(1-exp(-K.*LAI*dx))./(K*LAI*dx);     % Correct Ps/Po for finite dx if iLAI==0
 
 % Ps(1:nl)    =   Ps(1:nl) *(1-exp(-k*LAI*dx))/(k*LAI*dx);                                      % Correct Ps/Po for finite dx
 % Po(1:nl)    =   Po(1:nl) *(1-exp(-K*LAI*dx))/(K*LAI*dx);  % Correct Ps/Po for finite dx

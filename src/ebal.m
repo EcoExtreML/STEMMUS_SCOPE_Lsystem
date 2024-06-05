@@ -324,17 +324,25 @@ function [iter, fluxes, rad, thermal, profiles, soil, RWU, frac]             ...
             %     error('Heatfluxes produced negative values for CO2 concentration!')
             % end
 
-            % integration over the layers and sunlit and shaded fractions
+            % integration over the layers and sunlit and shaded fractions                     
+            if options.calc_canopy_structure
+                iLAI            = LAI*canopy.VerticalProbability(:,2);
+                Hctot           = sum(iLAI.*((1 - Ps(1:nl)) .* Hch + Ps(1:nl).*equations.meanleaf(canopy, Hcu,'angles'))); % sensible heat leaves
+                lEctot          = sum(iLAI.*((1 - Ps(1:nl)) .* lEch + Ps(1:nl).*equations.meanleaf(canopy, lEcu,'angles')));% latent heat leaves
+            else
+                Hctot       = LAI * (Fc * Hch + equations.meanleaf(canopy, Hcu, 'angles_and_layers', Ps));                          
+                lEctot     = LAI * (Fc * lEch + equations.meanleaf(canopy, lEcu, 'angles_and_layers', Ps)); % latent heat leaves
+            end
+            
             Hstot       = Fs * Hs;
-            Hctot       = LAI * (Fc * Hch + equations.meanleaf(canopy, Hcu, 'angles_and_layers', Ps));
             Htot        = Hstot + Hctot;
+
             %%%%%% Leaf water potential calculate
-            lambda1      = (2.501 - 0.002361 * Ta) * 1E6;
-            lEctot     = LAI * (Fc * lEch + equations.meanleaf(canopy, lEcu, 'angles_and_layers', Ps)); % latent heat leaves
             if isreal(lEctot) && lEctot < 1000 && lEctot > -300
             else
                 lEctot = 0;
             end
+            lambda1      = (2.501 - 0.002361 * Ta) * 1E6;
             Trans = lEctot / lambda1 / 1000;  % unit: m s-1
             AA1 = PSIs ./ (rsss + rrr + rxx);
             AA2 = 1 ./ (rsss + rrr + rxx);
@@ -466,17 +474,30 @@ function [iter, fluxes, rad, thermal, profiles, soil, RWU, frac]             ...
     %% 5. Calculate spectrally integrated energy, water and CO2 fluxes
     % sum of all leaves, and average leaf temperature
     %     (note that averaging temperature is physically not correct...)
-
-    Rnctot          = LAI * (Fc * Rnch + equations.meanleaf(canopy, Rncu, 'angles_and_layers', Ps)); % net radiation leaves
-    lEctot          = LAI * (Fc * lEch + equations.meanleaf(canopy, lEcu, 'angles_and_layers', Ps)); % latent heat leaves
-    Hctot           = LAI * (Fc * Hch  + equations.meanleaf(canopy, Hcu, 'angles_and_layers', Ps)); % sensible heat leaves
-    % Actot           = LAI*(Fc*Ah   + equations.meanleaf(canopy,Au  ,'angles_and_layers',Ps)); % photosynthesis leaves
-    Actot           = LAI * (Fc * Ahh   + equations.meanleaf(canopy, Auu, 'angles_and_layers', Ps)); % photosynthesis leaves
-    Tcave           =     (Fc * Tch  + equations.meanleaf(canopy, Tcu, 'angles_and_layers', Ps)); % mean leaf temperature
-    Pntot           = LAI * (Fc * Pinh + equations.meanleaf(canopy, Pinu, 'angles_and_layers', Ps)); % net PAR leaves
-    Pntot_Cab       = LAI * (Fc * Pinh_Cab + equations.meanleaf(canopy, Pinu_Cab, 'angles_and_layers', Ps)); % net PAR leaves
-    Rntot_PAR       = LAI * (Fc * Rnh_PAR  + equations.meanleaf(canopy, Rnu_PAR, 'angles_and_layers', Ps)); % net PAR leaves
-    aPAR_Cab_eta        = LAI * (Fc * (profiles.etah .* Rnh_PAR) + equations.meanleaf(canopy, profiles.etau .* Rnu_PAR, 'angles_and_layers', Ps));
+    
+    if options.calc_canopy_structure
+        Rnctot          = sum(iLAI.*((1 - Ps(1:nl)) .* Rnch + Ps(1:nl).*equations.meanleaf(canopy, Rncu,'angles'))); % net radiation leaves
+        lEctot          = sum(iLAI.*((1 - Ps(1:nl)) .* lEch + Ps(1:nl).*equations.meanleaf(canopy, lEcu,'angles')));% latent heat leaves
+        Hctot           = sum(iLAI.*((1 - Ps(1:nl)) .* Hch + Ps(1:nl).*equations.meanleaf(canopy, Hcu,'angles'))); % sensible heat leaves
+        % Actot           = LAI*(Fc*Ah   + equations.meanleaf(canopy,Au  ,'angles_and_layers',Ps)); % photosynthesis leaves
+        Actot           = sum(iLAI.*((1 - Ps(1:nl)) .* Ahh + Ps(1:nl).*equations.meanleaf(canopy, Auu,'angles'))); % photosynthesis leaves
+        Tcave           = mean(((1 - Ps(1:nl)) .* Tch + Ps(1:nl).*equations.meanleaf(canopy, Tcu,'angles'))); % mean leaf temperature
+        Pntot           = sum(iLAI.*((1 - Ps(1:nl)) .* Pinh + Ps(1:nl).*equations.meanleaf(canopy, Pinu,'angles'))); % net PAR leaves
+        Pntot_Cab       = sum(iLAI.*((1 - Ps(1:nl)) .* Pinh_Cab + Ps(1:nl).*equations.meanleaf(canopy, Pinu_Cab,'angles'))); % net PAR leaves
+        Rntot_PAR       = sum(iLAI.*((1 - Ps(1:nl)) .* Rnh_PAR + Ps(1:nl).*equations.meanleaf(canopy, Rnu_PAR,'angles'))); % net PAR leaves
+        aPAR_Cab_eta    = sum(iLAI.*((1 - Ps(1:nl)) .* (profiles.etah .* Rnh_PAR) + Ps(1:nl).*equations.meanleaf(canopy, (profiles.etau .* Rnu_PAR),'angles')));
+    else
+        Rnctot          = LAI * (Fc * Rnch + equations.meanleaf(canopy, Rncu, 'angles_and_layers', Ps)); % net radiation leaves
+        lEctot          = LAI * (Fc * lEch + equations.meanleaf(canopy, lEcu, 'angles_and_layers', Ps)); % latent heat leaves
+        Hctot           = LAI * (Fc * Hch  + equations.meanleaf(canopy, Hcu, 'angles_and_layers', Ps)); % sensible heat leaves
+        % Actot           = LAI*(Fc*Ah   + equations.meanleaf(canopy,Au  ,'angles_and_layers',Ps)); % photosynthesis leaves
+        Actot           = LAI * (Fc * Ahh   + equations.meanleaf(canopy, Auu, 'angles_and_layers', Ps)); % photosynthesis leaves
+        Tcave           =     (Fc * Tch  + equations.meanleaf(canopy, Tcu, 'angles_and_layers', Ps)); % mean leaf temperature
+        Pntot           = LAI * (Fc * Pinh + equations.meanleaf(canopy, Pinu, 'angles_and_layers', Ps)); % net PAR leaves
+        Pntot_Cab       = LAI * (Fc * Pinh_Cab + equations.meanleaf(canopy, Pinu_Cab, 'angles_and_layers', Ps)); % net PAR leaves
+        Rntot_PAR       = LAI * (Fc * Rnh_PAR  + equations.meanleaf(canopy, Rnu_PAR, 'angles_and_layers', Ps)); % net PAR leaves
+        aPAR_Cab_eta        = LAI * (Fc * (profiles.etah .* Rnh_PAR) + equations.meanleaf(canopy, profiles.etau .* Rnu_PAR, 'angles_and_layers', Ps));
+    end
     % ... green ePAR * relative fluorescence emission efficiency
     % [Delta_Rltot] = Root_properties(Rl, Ac, rroot, frac, bbx, KT, DeltZ, sfactor, LAI_msr);
     % Delta_Rl = fc*Delta_Rltot;
