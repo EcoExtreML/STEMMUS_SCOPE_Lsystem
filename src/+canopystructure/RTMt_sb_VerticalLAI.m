@@ -87,10 +87,10 @@ tau_dd      = rad.tau_dd(:,end);
 %% 1. calculation of upward and downward fluxes pag 305
 
 %1.1 radiance by components
-Hcsu3       = epsc*Stefan_Boltzmann(Tcu,constants);%                   Radiance by sunlit leaves
-Hcsh        = epsc*Stefan_Boltzmann(Tch,constants);%                   Radiance by shaded leaves
-Hssu        = epss*Stefan_Boltzmann(Tsu,constants);%                   Radiance by sunlit soil
-Hssh        = epss*Stefan_Boltzmann(Tsh,constants);%                   Radiance by shaded soil
+Hcsu3       = Stefan_Boltzmann(Tcu,constants);%                   Radiance by sunlit leaves
+Hcsh        = Stefan_Boltzmann(Tch,constants);%                   Radiance by shaded leaves
+Hssu        = Stefan_Boltzmann(Tsu,constants);%                   Radiance by sunlit soil
+Hssh        = Stefan_Boltzmann(Tsh,constants);%                   Radiance by shaded soil
 
 % 1.2 radiance by leaf layers Hv and by soil Hs (modified by JAK 2015-01)
 if size(Hcsu3,2)>1
@@ -106,20 +106,20 @@ Hs          = Hssu.*Ps(nl+1) + Hssh.*(1-Ps(nl+1));      % hemispherical emittanc
 % 1.3 Diffuse radiation
 [U,Es_,Emin,Eplu]           = deal(zeros(nl+1,1));       % [nl+1,nwl]     direct, up and down diff. rad.
 
-U(nl+1)               =   Hs;
+U(nl+1)               =   epss*Hs;
 Es_(1)              =   0;
 Emin(1)            =   0;
 
 for j=nl:-1:1      % from bottom to top
-    Y(j)  =   (rho_dd(j).*U(j+1)+Hc(j)*iLAI(j))./(1-rho_dd(j).*R_dd(j+1));
-    U(j)  =   tau_dd(j)*(R_dd(j+1).*Y(j)+U(j+1))+Hc(j)*iLAI(j);
+    Y(j)  =   (rho_dd(j).*U(j+1)+epsc*Hc(j)*iLAI(j))./(1-rho_dd(j).*R_dd(j+1));
+    U(j)  =   tau_dd(j)*(R_dd(j+1).*Y(j)+U(j+1))+epsc*Hc(j)*iLAI(j);
 end
 for j=1:nl       % from top to bottom
     Es_(j+1)    = Xss(j).*Es_(j);
     Emin(j+1)   = Xsd(j).*Es_(j)+Xdd(j).*Emin(j)+Y(j);
     Eplu(j)     = R_sd(j).*Es_(j)+R_dd(j).*Emin(j)+U(j);
 end
-Eplu(nl+1)      = R_sd(nl+1).*Es_(nl+1)+R_dd(nl+1).*Emin(nl+1)+Hs;    % ydy the original 
+Eplu(nl+1)      = R_sd(nl+1).*Es_(nl+1)+R_dd(nl+1).*Emin(nl+1)+epss*Hs;    % ydy the original Eplu(nl+1)= R_sd(nl).*Es_(nl)+R_dd(nl).*Emin(nl)+Hs is not corrected
 Eoutte          = Eplu(1);
 
 % 1.4 Directional radiation and brightness temperature
@@ -153,15 +153,15 @@ end
 if size(Hcsu3,2)>1
     Rnuc = 0*Hcsu3;
     for j = 1:nl
-        Rnuc(:,:,j) = (Emin(j) + Eplu(j+1) - 2*Hcsu3(:,:,j));    % sunlit leaf
+        Rnuc(:,:,j) = (Emin(j) + Eplu(j+1) - 2*Hcsu3(:,:,j))*epsc;    % sunlit leaf
     end
 else
-    Rnuc            = (Emin(1:end-1) + Eplu(2:end) - 2*(Hcsu));
+    Rnuc            = (Emin(1:end-1) + Eplu(2:end) - 2*(Hcsu))*epsc;
 end
 
-Rnhc            = (Emin(1:end-1) + Eplu(2:end) - 2*(Hcsh));
-Rnus            = (Emin(nl+1) - Hssu);                       % sunlit soil
-Rnhs            = (Emin(nl+1) - Hssh);                      % shaded soil
+Rnhc            = (Emin(1:end-1) + Eplu(2:end) - 2*(Hcsh))*epsc;
+Rnus            = (Emin(nl+1) - Hssu)*epss;                       % sunlit soil
+Rnhs            = (Emin(nl+1) - Hssh)*epss;                      % shaded soil
 
 %% 3. Write the output to the rad structure
 rad.Emint   = Emin;

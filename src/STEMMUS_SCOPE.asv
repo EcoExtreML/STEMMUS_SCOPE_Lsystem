@@ -413,7 +413,7 @@ if strcmp(bmiMode, 'update') || strcmp(runMode, 'full')
                 tlast    = tau(nwlP);
 
                 if options.soilspectrum == 0
-                    rs(IwlP) = rsfile(:, soil.spectrum +1);
+                    rs(IwlP) = rsfile(:, soil.spectrum);
                 else
                     soilemp.SMC   = 25;        % empirical parameter (fixed)
                     soilemp.film  = 0.015;     % empirical parameter (fixed)

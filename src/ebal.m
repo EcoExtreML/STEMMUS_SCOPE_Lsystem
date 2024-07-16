@@ -330,6 +330,7 @@ function [iter, fluxes, rad, thermal, profiles, soil, RWU, frac]             ...
                 Hctot           = sum(iLAI.*((1 - Ps(1:nl)) .* Hch + Ps(1:nl).*equations.meanleaf(canopy, Hcu,'angles'))); % sensible heat leaves
                 lEctot          = sum(iLAI.*((1 - Ps(1:nl)) .* lEch + Ps(1:nl).*equations.meanleaf(canopy, lEcu,'angles')));% latent heat leaves
             else
+                iLAI        = LAI / nl;
                 Hctot       = LAI * (Fc * Hch + equations.meanleaf(canopy, Hcu, 'angles_and_layers', Ps));                          
                 lEctot     = LAI * (Fc * lEch + equations.meanleaf(canopy, lEcu, 'angles_and_layers', Ps)); % latent heat leaves
             end
@@ -461,14 +462,14 @@ function [iter, fluxes, rad, thermal, profiles, soil, RWU, frac]             ...
         profiles.Tch        = Tch;                                                 % [nl]
         profiles.Tcu1d      = Tcu1d;                                               % [nl]
         profiles.Tc1d       = (1 - Ps(1:nl)) .* Tch       + Ps(1:nl) .* (Tcu1d);         % [nl]              mean temp leaves, per layer
-        profiles.Hc1d       = (1 - Ps(1:nl)) .* Hch       + Ps(1:nl) .* (Hcu1d);         % [nl]              mean sens heat leaves, per layer
-        profiles.lEc1d      = (1 - Ps(1:nl)) .* lEch      + Ps(1:nl) .* (lEcu1d);        % [nl]              mean latent heat leaves, per layer
-        profiles.A1d        = (1 - Ps(1:nl)) .* Ah        + Ps(1:nl) .* (Au1d);          % [nl]              mean photos leaves, per layer
-        profiles.F_Pn1d     = ((1 - Ps(1:nl)) .* Fh .* Pinh_Cab + Ps(1:nl) .* (Fu_Pn1d));  % [nl]           mean fluor leaves, per layer
-        profiles.qE         = ((1 - Ps(1:nl)) .* qEh      + Ps(1:nl) .* (qEuL));         % [nl]           mean fluor leaves, per layer
+        profiles.Hc1d       = iLAI.*((1 - Ps(1:nl)) .* Hch       + Ps(1:nl) .* (Hcu1d));         % [nl]              mean sens heat leaves, per layer
+        profiles.lEc1d      = iLAI.*((1 - Ps(1:nl)) .* lEch      + Ps(1:nl) .* (lEcu1d));        % [nl]              mean latent heat leaves, per layer
+        profiles.A1d        = iLAI.*((1 - Ps(1:nl)) .* Ah        + Ps(1:nl) .* (Au1d));          % [nl]              mean photos leaves, per layer
+        profiles.F_Pn1d     = iLAI.*((1 - Ps(1:nl)) .* Fh .* Pinh_Cab + Ps(1:nl) .* (Fu_Pn1d));  % [nl]           mean fluor leaves, per layer
+        profiles.qE         = iLAI.*((1 - Ps(1:nl)) .* qEh      + Ps(1:nl) .* (qEuL));         % [nl]           mean fluor leaves, per layer
         % profiles.Pn1d       = ((1-Ps(1:nl)).*Pinh     + Ps(1:nl).*(Pnu1d));        %[nl]           mean photos leaves, per layer
         % profiles.Pn1d_Cab   = ((1-Ps(1:nl)).*Pinh_Cab + Ps(1:nl).*(Pnu1d_Cab));        %[nl]           mean photos leaves, per layer
-        profiles.Rn1d       = ((1 - Ps(1:nl)) .* Rnch     + Ps(1:nl) .* (Rnu1d));        % [nl]
+        profiles.Rn1d       = iLAI.*((1 - Ps(1:nl)) .* Rnch     + Ps(1:nl) .* (Rnu1d));        % [nl]
     end
 
     %% 5. Calculate spectrally integrated energy, water and CO2 fluxes
